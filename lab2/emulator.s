@@ -12,6 +12,8 @@
 .equ OP_ADD,  0x1  /* Add number to accumulator */
 .equ OP_SUB,  0x2  /* Subtract number from accumulator */
 .equ OP_EXIT, 0x3  /* Exit program */
+.equ OP_SUBR, 0x4  /* Subtract acc from operand and store in acc */
+.equ OP_BLT,  0x5  /* Branch to inst if acc < 0 */
 
 /* Heap + Pregram instructions to emulate */
 .data
@@ -24,21 +26,22 @@ ACC:
 /* Program instructions to emulate */
 .align 2
 START:
-.word 0
-.word INSTR1
-INSTR1:
-.word 1
+.word OP_CLR
+.word SET_ACC_VAL
+SET_ACC_VAL:
+.word OP_SUB
 .word 77
-.word INSTR3
-INSTR2:
-.word 0
+.word CHECK_ACC_VAL
+CHECK_ACC_VAL:
+.word OP_BLT
+.word INVERSE_ACC_SIGN
 .word FIN
-INSTR3:
-.word 2
-.word 15
+INVERSE_ACC_SIGN:
+.word OP_SUBR
+.word 0
 .word FIN
 FIN:
-.word 3
+.word OP_EXIT
 
 /* NIOS II Program
  *
@@ -78,6 +81,14 @@ beq r13,r12,SUB
 movi r13,OP_EXIT       /* Test if OpCode at PC is OP_EXIT */
 beq r13,r12,EXIT
 
+movi r13,OP_SUBR       /* Test if OpCode at PC is OP_SUBR */
+beq r13,r12,SUBR
+
+movi r13,OP_BLT       /* Test if OpCode at PC is OP_BLT */
+beq r13,r12,BLT
+
+br EXIT                /* If we're here means there's an invalid OpCode was present */
+
 CLR:
 stw r0,(r9)
 
@@ -99,6 +110,26 @@ ldw r14,4(r11)
 sub r10,r10,r14
 stw r10,(r9)
 
+ldw r11,8(r11)
+br EMULATE
+
+SUBR:
+ldw r10,(r9)
+ldw r14,4(r11)
+sub r10,r14,r10
+stw r10,(r9)
+
+ldw r11,8(r11)
+br EMULATE
+
+BLT:                   /* Delicious! */
+ldw r10,(r9)
+
+bge r10,r0,GREATER
+ldw r11,4(r11)
+br EMULATE
+
+GREATER:
 ldw r11,8(r11)
 br EMULATE
 
