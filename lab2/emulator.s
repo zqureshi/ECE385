@@ -18,19 +18,26 @@
 
 /* The accumulator that stores the numbers */
 .align 2
-acc:
+ACC:
 .word 0xff
 
 /* Program instructions to emulate */
 .align 2
-start:
+START:
 .word 0
-.word instr_1
-instr_1:
+.word INSTR1
+INSTR1:
 .word 1
-.word 10
-.word end
-end:
+.word 77
+.word INSTR3
+INSTR2:
+.word 0
+.word FIN
+INSTR3:
+.word 2
+.word 15
+.word FIN
+FIN:
 .word 3
 
 /* NIOS II Program
@@ -40,15 +47,51 @@ end:
  * r9: Accumulator location
  * r10: Accumulator value (temp)
  * r11: Program counter
+ * r12: Program counter value
+ * r13: Opcode test value
+ * r14: Temp A
+ * r15: Temp B
  */
 .text
-.global main
+.global MAIN
 
-main:
-movia  r8,GREEN_LEDS    /* Store LED location */
-movia  r9,acc           /* Store Accumulator location */
-ldw    r10,(r9)         /* Move acc value to temp register */
-stwio  r10,(r8)         /* Write accumulator value to LED */
+MAIN:
+movia r8,GREEN_LEDS    /* Store LED location */
+movia r9,ACC           /* Store Accumulator location */
+movia r11,START        /* Point PC to first instruction of program */
 
-loop:
-br loop
+EMULATE:
+ldw r12,(r11)
+
+movi r13,OP_CLR
+beq r13,r12,CLR
+
+movi r13,OP_ADD
+beq r13,r12,ADD
+
+movi r13,OP_SUB
+beq r13,r12,SUB
+
+movi r13,OP_EXIT
+beq r13,r12,EXIT
+
+CLR:
+stw r0,(r9)
+
+ldw r11,4(r11)
+br EMULATE
+
+ADD:
+ldw r10,(r9)
+ldw r14,4(r11)
+add r10,r10,r14
+stw r10,(r9)
+
+ldw r11,8(r11)
+br EMULATE
+
+SUB:
+br EMULATE
+
+EXIT:
+br EXIT
