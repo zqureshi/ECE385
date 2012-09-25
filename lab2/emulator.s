@@ -56,23 +56,26 @@ FIN:
 .global MAIN
 
 MAIN:
-movia r8,GREEN_LEDS    /* Store LED location */
+movia r8,RED_LEDS      /* Store LED location */
 movia r9,ACC           /* Store Accumulator location */
 movia r11,START        /* Point PC to first instruction of program */
 
 EMULATE:
-ldw r12,(r11)
+ldw r10,(r9)           /* Load accumulator value */
+ldw r12,(r11)          /* Load OpCode from location in PC */
+stwio r10,(r8)         /* Write accumulator value out to Red LEDs */
+stwio r12,0x10(r8)     /* Write OpCode out to Green LEDs */
 
-movi r13,OP_CLR
+movi r13,OP_CLR        /* Test if OpCode at PC is OP_CLR */
 beq r13,r12,CLR
 
-movi r13,OP_ADD
+movi r13,OP_ADD        /* Test if OpCode at PC is OP_ADD */
 beq r13,r12,ADD
 
-movi r13,OP_SUB
+movi r13,OP_SUB        /* Test if OpCode at PC is OP_SUB */
 beq r13,r12,SUB
 
-movi r13,OP_EXIT
+movi r13,OP_EXIT       /* Test if OpCode at PC is OP_EXIT */
 beq r13,r12,EXIT
 
 CLR:
@@ -91,6 +94,12 @@ ldw r11,8(r11)
 br EMULATE
 
 SUB:
+ldw r10,(r9)
+ldw r14,4(r11)
+sub r10,r10,r14
+stw r10,(r9)
+
+ldw r11,8(r11)
 br EMULATE
 
 EXIT:
