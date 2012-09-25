@@ -21,17 +21,17 @@ movi r6,0          /* initialize counter */
 movi r5,4          /* set length of the array */
 
 LOOP:
-bge r6,r5,amin     /* test for end of array */
+bge r6,r5,main     /* test for end of array */
 
 ldb r7,0(r2)       /* load digit from array */
 or r3,r3,r7        /* add character to string of digits */
-stwio r3,0(r4)     /* write to the red LEDs /
+stwio r3,0(r4)     /* write to the red LEDs */
 addi r2,r2,1       /* increment address */
 slli r3,r3,4       /* scroll string to the left */
 
 addi r6,r6,1
 
-movia r99,10000000 /* set starting point for delay counter */
+movia r9,10000000 /* set starting point for delay counter */
 
 DELAY:
 subi r9,r9,1       /* subtract 1 from delay */
