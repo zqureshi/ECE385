@@ -17,8 +17,8 @@
 .equ DIRECTION_CONFIG, 0x07f557ff      /* Direction Register Configuration */
 .equ S0_BAL, 5                         /* Value of Sensor 0 when balanced */
 /* Timer configuration */
-.equ ON_CYCLES, 5000                   /* Cycles to turn motor on for */
-.equ OFF_CYCLES, 5000                  /* Cycles to keep motor off for */
+.equ ON_CYCLES, 50000                  /* Cycles to turn motor on for */
+.equ OFF_CYCLES, 50000                 /* Cycles to keep motor off for */
 
 .text
 .global main
@@ -78,7 +78,15 @@ movi32 r9, 0xfffffffe                  /* Turn motor left */
 br update
 
 update:
+stwio r9, 0(r8)                        /* Remain on for ON_CYCLES */
+movi32 r4, ON_CYCLES
+call timer_countdown
+
+movi32 r9, 0xffffffff                  /* Then remain off for OFF_CYCLES */
 stwio r9, 0(r8)
+movi32 r4, OFF_CYCLES
+call timer_countdown
+
 br loop
 
 /*
