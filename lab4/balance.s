@@ -1,7 +1,7 @@
 /*
  * ECE385: Lab 4
  *
- * Zeeshan Qureshi
+ * Zeeshan Qureshi (zeeshan.qureshi@mail.utoronto.ca)
  */
 
 /* MOVIA replacement */
@@ -10,9 +10,15 @@
   ori \reg, \reg, %lo(\val)
 .endm
 
-.equ ADDR_JP1, 0x10000060              /* Address of JTAG 1 Port */
+/* Device Addresses */
+.equ ADDR_JP1, 0x10000060              /* JTAG 1 Port */
+.equ ADDR_TIMER, 0x10002000            /* Timer device */
+/* Lego configuration */
 .equ DIRECTION_CONFIG, 0x07f557ff      /* Direction Register Configuration */
 .equ S0_BAL, 5                         /* Value of Sensor 0 when balanced */
+/* Timer configuration */
+.equ ON_CYCLES, 5000                   /* Cycles to turn motor on for */
+.equ OFF_CYCLES, 5000                  /* Cycles to keep motor off for */
 
 .text
 .global main
@@ -74,3 +80,36 @@ br update
 update:
 stwio r9, 0(r8)
 br loop
+
+/*
+ * Register Allocation
+ * Note: We're not backing up registers while calling or inside subroutine
+ * since this is a small program and we already know which registers we will
+ * be using.
+ * r4: (Argument) Number of cycles to wait
+ * r16: Address of Timer Device
+ * r17: Value read from / write to Timer
+ */
+timer_countdown:
+movi32 r16, ADDR_TIMER
+
+movi32 r17, 0x0                        /* Clear Timer */
+stwio r17, 0(r16)
+
+mov r17, r4                            /* Write lower half of period */
+andi r17, r17, 0x0000ffff
+stwio r17, 8(r16)
+
+mov r17, r4                            /* Write upper half of period */
+srli r17, r17, 16
+stwio r17, 12(r16)
+
+movi32 r17, 0x4                        /* Start Timer */
+stwio r17, 4(r16)
+
+timer_wait:
+ldwio r17, 0(r16)                      /* Check if timer has timed out */
+andi r17, r17, 0x1
+beq r0, r17, timer_wait
+
+ret
