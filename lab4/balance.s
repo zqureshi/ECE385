@@ -12,7 +12,7 @@
 
 .equ ADDR_JP1, 0x10000060              /* Address of JTAG 1 Port */
 .equ DIRECTION_CONFIG, 0x07f557ff      /* Direction Register Configuration */
-.equ S0_BAL, 6                         /* Value of Sensor 0 when balanced */
+.equ S0_BAL, 5                         /* Value of Sensor 0 when balanced */
 
 .text
 .global main
@@ -22,6 +22,7 @@
  * r8: Address of JTAG 1 Port
  * r9: Value to be written to JP1
  * r10: Value read frow JP1
+ * r11: Value of comparison
  */
 main:
 movi32 r8, ADDR_JP1
@@ -51,9 +52,16 @@ calc_dir:
 ldwio r10, 0(r8)                       /* Read data from JP1 */
 srli r10, r10, 27                      /* Move bits 27-30 to 0-3 */
 andi r10, r10, 0xf                     /* Clear out other bits */
-cmpltui r10, r10, S0_BAL               /* If S0 < BAL turn left, else right */
-beq r0, r10, turn_right
-br turn_left
+cmpnei r11, r10, S0_BAL                /* If balanced, turn motor off */
+beq r0, r11, motor_off
+cmpgtui r11, r10, S0_BAL               /* If S0 < BAL turn left */
+beq r0, r11, turn_left
+cmpltui r11, r10, S0_BAL               /* If S0 > BAL turn right */
+beq r0, r11, turn_right
+
+motor_off:
+movi32 r9, 0xffffffff                  /* If balanced, turn motor off */
+br update
 
 turn_right:
 movi32 r9, 0xfffffffc                  /* Turn motor right */
