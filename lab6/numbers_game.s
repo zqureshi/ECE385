@@ -9,7 +9,7 @@
 .equ SPACE, 0x20             /* ASCII space character */
 
 .equ TIMER_INT, 0x00000001	 /* IRQ bit for timer interrupts */
-.equ UART_INT, 0x00000100	 /* IRQ bit for JTAG UART interrupts */
+.equ UART_INT,  0x00000100	 /* IRQ bit for JTAG UART interrupts */
 
 /* MOVIA replacement */
 .macro MOVI32 reg, val
@@ -82,7 +82,7 @@ rdctl r22, ctl4
 and r22, r22, r20				     /* Check for timer interrupts */
 bne r22, r20, check_uart_interrupt
 
-check_timer_interrupt:
+handle_timer_interrupt:
 call lab5_rand               /* Generate random character */
 sbl BUFFER r2                /* Insert generated character */
 
@@ -93,19 +93,23 @@ count WAIT_CYCLES            /* Restart Timer */
 
 check_uart_interrupt:
 rdctl r22, ctl4
-and r22, r22, r21				/* Check for jtag uart interrupts */
-beq r22, r21, finish_isr
+and r22, r22, r21				     /* Check for jtag uart interrupts */
+bne r22, r21, finish_isr
 
-/* Acknowledge interrupt */
-/* Clear buffer of matching character */
+handle_uart_interrupt:
+ldwio r11, 0(r8)             /* Check for input (and implicitly acknowledge interrupts) */
+andi r15, r11, 0x1 << 15
+beq r0, r15, finish_isr
 
+andi r11, r11, 0xff          /* Remove entered character from buffer */
+rbc BUFFER, r11
 
 finish_isr:
 print RESET_TERM             /* Display buffer via UART */
 print BUFFER
 print RESET_CURSOR
 
-subi ea, ea, 4					/* Subtract 4 from ea so that eret returns to the correct instruction */
+subi ea, ea, 4					     /* Subtract 4 from ea so that eret returns to the correct instruction */
 eret
 
 
@@ -139,17 +143,15 @@ wrctl ctl0, r15
 
 /* Setup and enable timer interupt */
 count WAIT_CYCLES            /* Start Timer */
+
 /* Setup and enable jtag uart interrupt */
+ldwio r15, 4(r8)
+ori r15, r15, 0x1
+stwio r15, 4(r8)
 
 movi r16, 0x1                 /* Reset game flag */
 loop:
-#ldwio r11, 0(r8)             /* Check for input */
-#andi r15, r11, 0x1 << 15
-#beq r0, r15, check_timer
-#
-#andi r11, r11, 0xff          /* Remove entered character from buffer */
-#rbc BUFFER, r11 /*
-bne r0, r16, loop
+bne r0, r16, loop             /* Loop if game not over */
 
 
 rdctl r15, ctl0	             /* Disable interrupts globally on the processor */
