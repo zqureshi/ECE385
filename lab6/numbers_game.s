@@ -66,6 +66,7 @@ OVER_MESSAGE:
 
 
 .section .exceptions, "ax"
+
 /*
  * Interrupt Service Routine
  * Register Allocation
@@ -77,18 +78,22 @@ OVER_MESSAGE:
 interrupt_service_routine:
 movi32 r20, TIMER_INT
 movi32 r21, UART_INT
-and r22, ctl4, r20				/* Check for timer interrupts */
+rdctl r22, ctl4
+and r22, r22, r20				     /* Check for timer interrupts */
 bne r22, r20, check_uart_interrupt
 
-stwio r0, 0(r12)				/* Acknowledge interrupt */
+check_timer_interrupt:
+call lab5_rand               /* Generate random character */
+sbl BUFFER r2                /* Insert generated character */
 
-/* Reset timer */
-/* Generate random character and append */
-/* Check for game over condition */
+ldb r10, 0(r9)               /* If first character in buffer is not a space */
+cmpeqi r16, r10, SPACE       /* then game is over */
 
+count WAIT_CYCLES            /* Restart Timer */
 
 check_uart_interrupt:
-and r22, ctl4, r21				/* Check for jtag uart interrupts */
+rdctl r22, ctl4
+and r22, r22, r21				/* Check for jtag uart interrupts */
 beq r22, r21, finish_isr
 
 /* Acknowledge interrupt */
@@ -96,6 +101,10 @@ beq r22, r21, finish_isr
 
 
 finish_isr:
+print RESET_TERM             /* Display buffer via UART */
+print BUFFER
+print RESET_CURSOR
+
 subi ea, ea, 4					/* Subtract 4 from ea so that eret returns to the correct instruction */
 eret
 
@@ -107,59 +116,46 @@ eret
 /*
  * Register Allocation
  * r8: Address of JTAG UART (Shared by all other methods)
- * r9: Address of buffer
+ * r9: Address of buffer    (Shared by the ISR)
  * r10: Current character at buffer
  * r11: Data read from UART
- * r12: Address of Timer
+ * r12: Address of Timer    (Shared by the ISR)
  * r15: Temp / Comparison Value
+ * r16: Game over flag      (Shared by the ISR)
+ * r17: Temp / Control register val
  */
 main:
 movi32 r8, ADDR_UART         /* Initialize Device Addresses */
 movi32 r9, BUFFER
 movi32 r12, ADDR_TIMER
 
-mov r15, ctl3				 /* Enable timer and jtag uart exceptions */
-and r15, r15, 0x00000101
-mov ctl3, r15
+rdctl r15, ctl3				       /* Enable timer and jtag uart exceptions */
+ori r15, r15, 0x0101
+wrctl ctl3, r15
 
-mov r15, ctl0
-and r15, r15, 0x00000001	 /* Enable interrupts globally on the processor */
-mov ctl0, r15
+rdctl r15, ctl0	             /* Enable interrupts globally on the processor */
+ori r15, r15, 0x0001
+wrctl ctl0, r15
 
 /* Setup and enable timer interupt */
-/* Setup and enable jtag uart interrupt */
-/* Enter loop which constantly checks for end of game, branch to game_over if found */
-
-
 count WAIT_CYCLES            /* Start Timer */
+/* Setup and enable jtag uart interrupt */
 
+movi r16, 0x1                 /* Reset game flag */
 loop:
-ldwio r11, 0(r8)             /* Check for input */
-andi r15, r11, 0x1 << 15
-beq r0, r15, check_timer
+#ldwio r11, 0(r8)             /* Check for input */
+#andi r15, r11, 0x1 << 15
+#beq r0, r15, check_timer
+#
+#andi r11, r11, 0xff          /* Remove entered character from buffer */
+#rbc BUFFER, r11 /*
+bne r0, r16, loop
 
-andi r11, r11, 0xff          /* Remove entered character from buffer */
-rbc BUFFER, r11
 
-display_buffer:
-print RESET_TERM             /* Display buffer via UART */
-print BUFFER
-print RESET_CURSOR
-
-check_timer:
-ldwio r15, 0(r12)            /* Check if timer has timed out */
-andi r15, r15, 0x1
-beq r0, r15, loop
-
-call lab5_rand               /* Generate random character */
-sbl BUFFER r2                /* Insert generated character */
-
-ldb r10, 0(r9)               /* If first character in buffer is not a space */
-cmpeqi r16, r10, SPACE       /* then game is over */
-beq r0, r16, game_over
-
-count WAIT_CYCLES            /* Restart timer */
-br display_buffer
+rdctl r15, ctl0	             /* Disable interrupts globally on the processor */
+movi32 r17, ~(0x1)
+and r15, r15, r17
+wrctl ctl0, r15
 
 game_over:                   /* Flash OVER_MESSAGE */
 print RESET_TERM
@@ -170,6 +166,7 @@ wait FLASH_CYCLES
 print RESET_TERM
 wait FLASH_CYCLES
 br game_over
+
 
 /*
  * Write buffer to UART
@@ -264,7 +261,7 @@ mov r6, r4                   /* Write upper half of period */
 srli r6, r6, 16
 stwio r6, 12(r5)
 
-movi32 r6, 0x4               /* Start Timer */
+movi32 r6, 0x5               /* Start Timer with interrupts enabled */
 stwio r6, 4(r5)
 
 ret
