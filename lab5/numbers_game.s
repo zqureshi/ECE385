@@ -29,6 +29,13 @@ mov r5, \replacement
 call shift_buf_left
 .endm
 
+/* Call replace_buf_char with the string and replacement character */
+.macro rbc string replacement
+movi32 r4, \string
+movi32 r5, \replacement
+call replace_buf_char
+.endm
+
 /* Wait for given cycles by polling timer */
 .macro wait cycles
 movi32 r4, \cycles
@@ -58,6 +65,7 @@ OVER_MESSAGE:
  * r8: Address of JTAG UART (Shared by all other methods)
  * r9: Address of buffer
  * r10: Current character at buffer
+ * r11: Data read from UART
  * r15: Temp / Comparison Value
  */
 main:
@@ -79,7 +87,7 @@ print RESET_CURSOR
 wait WAIT_CYCLES
 br loop
 
-game_over:
+game_over:                   /* Flash OVER_MESSAGE */
 print RESET_TERM
 wait FLASH_CYCLES
 print OVER_MESSAGE
@@ -134,6 +142,28 @@ sbl_ins_rep:
 stb r5, 0(r4)                /* Insert replacement char at the position */
 
 sbl_exit:
+ret
+
+/*
+ * Remove the specified character from each location in the buffer
+ * and replace with a <SPACE>.
+ *
+ * Register Allocation:
+ * r4: Argument: Address of buffer
+ * r5: Argument: Character to remove
+ * r6: Current character at buffer
+ */
+replace_buf_char:
+ldb r6, 0(r4)
+beq r0, r6, rbc_exit         /* If buffer is empty, exit */
+bne r5, r6, rbc_continue     /* If not the character to replace, continue */
+movi32 r6, SPACE             /* Replace with a space */
+stbio r6, 0(r4)
+rbc_continue:
+addi r4, r4, 1               /* Move to next character */
+br replace_buf_char
+
+rbc_exit:
 ret
 
 /*
