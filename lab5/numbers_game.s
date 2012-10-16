@@ -32,20 +32,26 @@ call shift_buf_left
 /* Call replace_buf_char with the string and replacement character */
 .macro rbc string replacement
 movi32 r4, \string
-movi32 r5, \replacement
+mov r5, \replacement
 call replace_buf_char
 .endm
 
-/* Wait for given cycles by polling timer */
-.macro wait cycles
+/* Start timer to count for given cycles */
+.macro count cycles
 movi32 r4, \cycles
-call timer_countdown
+call timer_start
+.endm
+
+/* Start timer to count for given cycles and wait */
+.macro wait cycles
+count \cycles
+call timer_wait
 .endm
 
 .data
 
 BUFFER:
-.skip 10, SPACE              /* Standard null-terminated array */
+.skip 40, SPACE              /* Standard null-terminated string */
 .byte 0x00
 
 RESET_TERM:                  /* Control sequences to reset terminal */
@@ -55,7 +61,7 @@ RESET_CURSOR:                /* Reset cursor to home position */
 .string "\x1b[H"
 
 OVER_MESSAGE:
-.string "GAME OVER!"          /* Message to display when game is over */
+.string "GAME OVER!"         /* Message to display when game is over */
 
 .text
 .global main
@@ -66,32 +72,51 @@ OVER_MESSAGE:
  * r9: Address of buffer
  * r10: Current character at buffer
  * r11: Data read from UART
+ * r12: Address of Timer
  * r15: Temp / Comparison Value
  */
 main:
-movi32 r8, ADDR_UART
+movi32 r8, ADDR_UART         /* Initialize Device Addresses */
 movi32 r9, BUFFER
+movi32 r12, ADDR_TIMER
+
+count WAIT_CYCLES            /* Start Timer */
 
 loop:
+ldwio r11, 0(r8)             /* Check for input */
+andi r15, r11, 0x1 << 15
+beq r0, r15, check_timer
+
+andi r11, r11, 0xff          /* Remove entered character from buffer */
+rbc BUFFER, r11
+
+display_buffer:
+print RESET_TERM             /* Display buffer via UART */
+print BUFFER
+print RESET_CURSOR
+
+check_timer:
+ldwio r15, 0(r12)            /* Check if timer has timed out */
+andi r15, r15, 0x1
+beq r0, r15, loop
+
 call lab5_rand               /* Generate random character */
+sbl BUFFER r2                /* Insert generated character */
 
 ldb r10, 0(r9)               /* If first character in buffer is not a space */
 cmpeqi r16, r10, SPACE       /* then game is over */
 beq r0, r16, game_over
 
-sbl BUFFER r2                /* Insert generated character and display */
-print RESET_TERM
-print BUFFER
-print RESET_CURSOR
-
-wait WAIT_CYCLES
-br loop
+count WAIT_CYCLES            /* Restart timer */
+br display_buffer
 
 game_over:                   /* Flash OVER_MESSAGE */
 print RESET_TERM
-wait FLASH_CYCLES
 print OVER_MESSAGE
 print RESET_CURSOR
+wait FLASH_CYCLES
+
+print RESET_TERM
 wait FLASH_CYCLES
 br game_over
 
@@ -174,25 +199,36 @@ ret
  * r5: Address of Timer Device
  * r6: Value read from / write to Timer
  */
-timer_countdown:
+timer_start:
 movi32 r5, ADDR_TIMER
 
-movi32 r6, 0x0                        /* Clear Timer */
+movi32 r6, 0x0               /* Clear Timer */
 stwio r6, 0(r5)
 
-mov r6, r4                            /* Write lower half of period */
+mov r6, r4                   /* Write lower half of period */
 andi r6, r6, 0x0000ffff
 stwio r6, 8(r5)
 
-mov r6, r4                            /* Write upper half of period */
+mov r6, r4                   /* Write upper half of period */
 srli r6, r6, 16
 stwio r6, 12(r5)
 
-movi32 r6, 0x4                        /* Start Timer */
+movi32 r6, 0x4               /* Start Timer */
 stwio r6, 4(r5)
 
+ret
+
+/*
+ * Wait for Timer to count down
+ *
+ * Register Allocation
+ * r5: Address of Timer
+ * r6: Value read from Timer
+ */
 timer_wait:
-ldwio r6, 0(r5)                      /* Check if timer has timed out */
+movi32 r5, ADDR_TIMER
+
+ldwio r6, 0(r5)              /* Check if timer has timed out */
 andi r6, r6, 0x1
 beq r0, r6, timer_wait
 
