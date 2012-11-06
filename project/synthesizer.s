@@ -2,29 +2,36 @@
  * ECE 385: Final Project
  */
  
-.macro MOVI32 reg, val		 # movia replacement 
+.macro MOVI32 reg, val	 # movia replacement 
   movhi \reg, %hi(\val)
   ori \reg, \reg, %lo(\val)
 .endm
 
 .macro count cycles			 #Start timer to count for given cycles
-movi32 r4, \cycles
-call timer_start
+  movi32 r4, \cycles
+  call timer_start
 .endm
 
 .equ ADDR_AUDIO, 0x10003040
-.equ ADDR_TIMER, 0x10002000  #Timer device
-.equ TIMER_INT, 0x00000001   #IRQ bit for timer interrupts
-.equ WAIT_CYCLES, 1136
+.equ ADDR_TIMER, 0x10002000  # Timer device
+.equ ADDR_AUDIO, 0x10003040  # Audio Device
+.equ TIMER_INT, 0x00000001   # IRQ bit for timer interrupts
+.equ WAIT_CYCLES, 500       # 48000Hz
+
+.equ SAMPLE_RATE, 48000      # Sample Rate of Timer
+.equ FREQ, 5000              # Frequency to output
+.equ VOL,  0x0fffffff        # Volume of output
 
 .global start
 
 .section .exceptions, "ax"
 /*
  * Interrupt Service Routine
+ * r8: Frequency Counter
+ * r9: Sign bit
  * r20: Timer interrupt bit in ctl4
  * r21: Temp/value register for various ops
-
+ * r24: Multiplier result / temp
  */
 interrupt_service_routine:
 
@@ -34,8 +41,28 @@ rdctl r21, ctl4
 and r21, r21, r20            #Check for timer interrupts
 bne r21, r20, check_push_button
 
-/* Add stuff to sound buffer */
+/* Check audio FIFO */
+movi32 r21, ADDR_AUDIO
+ldwio r24, 4(r21)
+srli r24, r24, 24
+beq r0, r24, reset_timer
 
+/* Add stuff to sound buffer */
+addi r8, r8, -1
+bne r0, r8, output_audio
+/* Calculate samples to output for frequency */
+movi32 r8, SAMPLE_RATE
+movi32 r24, FREQ * 2
+div r8, r8, r24
+sub r9, r0, r9
+
+output_audio:
+movi32 r24, VOL
+mul r24, r24, r9
+stwio r24,  8(r21)    # Output to left channel
+stwio r24, 12(r21)    # Output to right channel
+
+reset_timer:
 count WAIT_CYCLES            #Restart Timer
 
 check_push_button:
@@ -52,6 +79,10 @@ eret
 
 start:
 
+# Configure audio frequencies
+movi32 r8, 1
+movi32 r9, -1
+
 rdctl r16, ctl3              #Enable timer exceptions
 ori r16, r16, 0x0001
 wrctl ctl3, r16
@@ -64,11 +95,6 @@ count WAIT_CYCLES			 #Start timer
 
 eternal_loop:
 br eternal_loop
-
-
-
-
-
 
 /*
  * Start Timer to run for WAIT_CYCLES
