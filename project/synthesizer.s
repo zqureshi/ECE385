@@ -2,12 +2,12 @@
  * ECE 385: Final Project
  */
  
-.macro MOVI32 reg, val	 # movia replacement 
+.macro MOVI32 reg, val   # movia replacement 
   movhi \reg, %hi(\val)
   ori \reg, \reg, %lo(\val)
 .endm
 
-.macro count cycles			 #Start timer to count for given cycles
+.macro count cycles                      #Start timer to count for given cycles
   movi32 r4, \cycles
   call timer_start
 .endm
@@ -16,10 +16,10 @@
 .equ ADDR_TIMER, 0x10002000  # Timer device
 .equ ADDR_AUDIO, 0x10003040  # Audio Device
 .equ TIMER_INT, 0x00000001   # IRQ bit for timer interrupts
-.equ WAIT_CYCLES, 500       # 48000Hz
+.equ WAIT_CYCLES, 800        # 48000Hz
 
 .equ SAMPLE_RATE, 48000      # Sample Rate of Timer
-.equ FREQ, 5000              # Frequency to output
+.equ FREQ, 10                # Frequency to output
 .equ VOL,  0x0fffffff        # Volume of output
 
 .global start
@@ -29,6 +29,7 @@
  * Interrupt Service Routine
  * r8: Frequency Counter
  * r9: Sign bit
+ * r10: Frequency to output
  * r20: Timer interrupt bit in ctl4
  * r21: Temp/value register for various ops
  * r24: Multiplier result / temp
@@ -49,14 +50,28 @@ beq r0, r24, reset_timer
 
 /* Add stuff to sound buffer */
 addi r8, r8, -1
-bne r0, r8, output_audio
+bgt r8, r0, output_audio
+/* Double the FREQ */
+mov r21, r10
+movi32 r24, 10
+div r21, r21, r24
+add r10, r10, r21
+/* Reset to Original FREQ when 20KHz */
+movi32 r21, 30000
+bgt r21, r10, calculate_sample
+movi32 r10, FREQ
+
+calculate_sample:
 /* Calculate samples to output for frequency */
 movi32 r8, SAMPLE_RATE
-movi32 r24, FREQ * 2
-div r8, r8, r24
 sub r9, r0, r9
+mov r24, r10
+muli r24, r24, 2
+div r8, r8, r24
+movi32 r21, 10
 
 output_audio:
+movi32 r21, ADDR_AUDIO
 movi32 r24, VOL
 mul r24, r24, r9
 stwio r24,  8(r21)    # Output to left channel
@@ -80,8 +95,9 @@ eret
 start:
 
 # Configure audio frequencies
-movi32 r8, 1
+movi32 r8, 0
 movi32 r9, -1
+movi32 r10, FREQ
 
 rdctl r16, ctl3              #Enable timer exceptions
 ori r16, r16, 0x0001
@@ -91,7 +107,7 @@ rdctl r16, ctl0              #Enable interrupts globally on the processor
 ori r16, r16, 0x0001
 wrctl ctl0, r16
 
-count WAIT_CYCLES			 #Start timer
+count WAIT_CYCLES                        #Start timer
 
 eternal_loop:
 br eternal_loop
@@ -122,4 +138,3 @@ movi32 r6, 0x5               /* Start Timer with interrupts enabled */
 stwio r6, 4(r5)
 
 ret
-
