@@ -15,12 +15,18 @@
 .equ ADDR_AUDIO, 0x10003040
 .equ ADDR_TIMER, 0x10002000  # Timer device
 .equ ADDR_AUDIO, 0x10003040  # Audio Device
+.equ ADDR_BTTN, 0x10000050   # Push Buttons
 .equ TIMER_INT, 0x00000001   # IRQ bit for timer interrupts
+.equ BTTN_INT, 0x00000002    # IRQ for push buttons
 .equ WAIT_CYCLES, 800        # 48000Hz
 
 .equ SAMPLE_RATE, 48000      # Sample Rate of Timer
-.equ FREQ, 10                # Frequency to output
+.equ FREQ, 100               # Frequency to output
 .equ VOL,  0x0fffffff        # Volume of output
+
+.equ FREQ_BT1, 200               # Frequency for Button 1
+.equ FREQ_BT2, 400               # Frequency for Button 2
+.equ FREQ_BT3, 800               # Frequency for Button 3
 
 .global start
 
@@ -29,7 +35,7 @@
  * Interrupt Service Routine
  * r8: Frequency Counter
  * r9: Sign bit
- * r10: Frequency to output
+ * r10: Samples to output
  * r20: Timer interrupt bit in ctl4
  * r21: Temp/value register for various ops
  * r24: Multiplier result / temp
@@ -51,15 +57,6 @@ beq r0, r24, reset_timer
 /* Add stuff to sound buffer */
 addi r8, r8, -1
 bgt r8, r0, output_audio
-/* Double the FREQ */
-mov r21, r10
-movi32 r24, 10
-div r21, r21, r24
-add r10, r10, r21
-/* Reset to Original FREQ when 20KHz */
-movi32 r21, 30000
-bgt r21, r10, calculate_sample
-movi32 r10, FREQ
 
 calculate_sample:
 /* Calculate samples to output for frequency */
@@ -81,9 +78,38 @@ reset_timer:
 count WAIT_CYCLES            #Restart Timer
 
 check_push_button:
+movi32 r20, BTTN_INT
+rdctl r21, ctl4
+and r21, r21, r20            #Check for push_button interrupts
+bne r21, r20, exit_isr
 
-/* Check for push button interrupts */
+read_push_buttons:
+movi32 r21, ADDR_BTTN
+ldwio r24, 12(r21)
 
+check_button_1:
+movi32 r21, 0x1 << 1         # Check button 1
+and r21, r21, r24
+beq r0, r21, check_button_2
+movi32 r10, FREQ_BT1
+
+check_button_2:
+movi32 r21, 0x1 << 2         # Check button 2
+and r21, r21, r24
+beq r0, r21, check_button_3
+movi32 r10, FREQ_BT2
+
+check_button_3:
+movi32 r21, 0x1 << 3         # Check button 3
+and r21, r21, r24
+beq r0, r21, acknowledge_push_button
+movi32 r10, FREQ_BT3
+
+acknowledge_push_button:
+movi32 r21, ADDR_BTTN
+stwio r0, 12(r21)
+
+exit_isr:
 subi ea, ea, 4               #Subtract 4 from ea so that eret returns to the correct instruction
 eret
 
@@ -100,14 +126,18 @@ movi32 r9, -1
 movi32 r10, FREQ
 
 rdctl r16, ctl3              #Enable timer exceptions
-ori r16, r16, 0x0001
+ori r16, r16, TIMER_INT | BTTN_INT
 wrctl ctl3, r16
+
+movia r2, ADDR_BTTN          #Enable interrupts on push buttons 1,2, and 3
+movia r3, 0xe
+stwio r3, 8(r2)
 
 rdctl r16, ctl0              #Enable interrupts globally on the processor
 ori r16, r16, 0x0001
 wrctl ctl0, r16
 
-count WAIT_CYCLES                        #Start timer
+count WAIT_CYCLES            #Start timer
 
 eternal_loop:
 br eternal_loop
