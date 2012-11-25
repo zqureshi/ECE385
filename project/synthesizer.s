@@ -7,7 +7,7 @@
   ori \reg, \reg, %lo(\val)
 .endm
 
-.macro count cycles                      #Start timer to count for given cycles
+.macro count cycles                      # Start timer to count for given cycles
   movi32 r4, \cycles
   call timer_start
 .endm
@@ -45,7 +45,7 @@ interrupt_service_routine:
 handle_timer_interrupt:
 movi32 r20, TIMER_INT
 rdctl r21, ctl4
-and r21, r21, r20            #Check for timer interrupts
+and r21, r21, r20            # Check for timer interrupts
 bne r21, r20, check_push_button
 
 /* Check audio FIFO */
@@ -75,12 +75,12 @@ stwio r24,  8(r21)    # Output to left channel
 stwio r24, 12(r21)    # Output to right channel
 
 reset_timer:
-count WAIT_CYCLES            #Restart Timer
+count WAIT_CYCLES            # Restart Timer
 
 check_push_button:
 movi32 r20, BTTN_INT
 rdctl r21, ctl4
-and r21, r21, r20            #Check for push_button interrupts
+and r21, r21, r20            # Check for push_button interrupts
 bne r21, r20, exit_isr
 
 read_push_buttons:
@@ -123,7 +123,7 @@ ldw r10, 8(sp)
 addi sp, sp, 12
 
 exit_isr:
-subi ea, ea, 4               #Subtract 4 from ea so that eret returns to the correct instruction
+subi ea, ea, 4               # Subtract 4 from ea so that eret returns to the correct instruction
 eret
 
 /*
@@ -138,19 +138,19 @@ movi32 r8, 0
 movi32 r9, -1
 movi32 r10, FREQ
 
-rdctl r16, ctl3              #Enable timer exceptions
+rdctl r16, ctl3              # Enable timer exceptions
 ori r16, r16, TIMER_INT | BTTN_INT
 wrctl ctl3, r16
 
-movia r2, ADDR_BTTN          #Enable interrupts on push buttons 1,2, and 3
+movia r2, ADDR_BTTN          # Enable interrupts on push buttons 1,2, and 3
 movia r3, 0xe
 stwio r3, 8(r2)
 
-rdctl r16, ctl0              #Enable interrupts globally on the processor
+rdctl r16, ctl0              # Enable interrupts globally on the processor
 ori r16, r16, 0x0001
 wrctl ctl0, r16
 
-count WAIT_CYCLES            #Start timer
+count WAIT_CYCLES            # Start timer
 
 eternal_loop:
 br eternal_loop
