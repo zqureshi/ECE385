@@ -109,6 +109,19 @@ acknowledge_push_button:
 movi32 r21, ADDR_BTTN
 stwio r0, 12(r21)
 
+addi sp, sp, -12             # Backup registers to stack
+stw r8, 0(sp)
+stw r9, 4(sp)
+stw r10, 8(sp)
+
+mov r4, r10                  # Call the printFreq function
+call printFreq
+
+ldw r8, 0(sp)                # Restore registers from stack
+ldw r9, 4(sp)
+ldw r10, 8(sp)
+addi sp, sp, 12
+
 exit_isr:
 subi ea, ea, 4               #Subtract 4 from ea so that eret returns to the correct instruction
 eret
