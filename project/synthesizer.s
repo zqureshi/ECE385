@@ -18,15 +18,14 @@
 .equ ADDR_BTTN, 0x10000050   # Push Buttons
 .equ TIMER_INT, 0x00000001   # IRQ bit for timer interrupts
 .equ BTTN_INT, 0x00000002    # IRQ for push buttons
-.equ WAIT_CYCLES, 800        # 48000Hz
+.equ WAIT_CYCLES, 500        # 48000Hz + Margin
 
 .equ SAMPLE_RATE, 48000      # Sample Rate of Timer
-.equ FREQ, 100               # Frequency to output
 .equ VOL,  0x0fffffff        # Volume of output
 
-.equ FREQ_BT1, 200               # Frequency for Button 1
-.equ FREQ_BT2, 400               # Frequency for Button 2
-.equ FREQ_BT3, 800               # Frequency for Button 3
+.equ NOTE_C, 33              # Frequency for Button 1
+.equ NOTE_F, 44              # Frequency for Button 2
+.equ NOTE_A, 55              # Frequency for Button 3
 
 .global start
 
@@ -36,11 +35,36 @@
  * r8: Frequency Counter
  * r9: Sign bit
  * r10: Samples to output
+ * r11: Note to output C/F/A
  * r20: Timer interrupt bit in ctl4
  * r21: Temp/value register for various ops
  * r24: Multiplier result / temp
  */
 interrupt_service_routine:
+addi sp, sp, -16             # Backup registers to stack
+stw r8, 0(sp)
+stw r9, 4(sp)
+stw r10, 8(sp)
+stw r11, 12(sp)
+
+mov r4, r11                  # Calculate output frequency
+call calcFreq
+
+ldw r10, 8(sp)               # Check if output frequency changed
+beq r10, r2, isr_restore_stack
+stw r2, 8(sp)                # Put new value of r10 in stack
+
+mov r4, r2                   # Output newfrequency to LCD
+call printFreq
+
+isr_restore_stack:
+ldw r8, 0(sp)                # Restore registers from stack
+ldw r9, 4(sp)
+ldw r10, 8(sp)
+ldw r11, 12(sp)
+addi sp, sp, 16
+
+# TODO: Output frequency to LCD if changed
 
 handle_timer_interrupt:
 movi32 r20, TIMER_INT
@@ -91,36 +115,23 @@ check_button_1:
 movi32 r21, 0x1 << 1         # Check button 1
 and r21, r21, r24
 beq r0, r21, check_button_2
-movi32 r10, FREQ_BT1
+movi32 r11, NOTE_A
 
 check_button_2:
 movi32 r21, 0x1 << 2         # Check button 2
 and r21, r21, r24
 beq r0, r21, check_button_3
-movi32 r10, FREQ_BT2
+movi32 r11, NOTE_F
 
 check_button_3:
 movi32 r21, 0x1 << 3         # Check button 3
 and r21, r21, r24
 beq r0, r21, acknowledge_push_button
-movi32 r10, FREQ_BT3
+movi32 r11, NOTE_C
 
 acknowledge_push_button:
 movi32 r21, ADDR_BTTN
 stwio r0, 12(r21)
-
-addi sp, sp, -12             # Backup registers to stack
-stw r8, 0(sp)
-stw r9, 4(sp)
-stw r10, 8(sp)
-
-mov r4, r10                  # Call the printFreq function
-call printFreq
-
-ldw r8, 0(sp)                # Restore registers from stack
-ldw r9, 4(sp)
-ldw r10, 8(sp)
-addi sp, sp, 12
 
 exit_isr:
 subi ea, ea, 4               # Subtract 4 from ea so that eret returns to the correct instruction
@@ -136,7 +147,7 @@ start:
 # Configure audio frequencies
 movi32 r8, 0
 movi32 r9, -1
-movi32 r10, FREQ
+movi32 r11, NOTE_C
 
 rdctl r16, ctl3              # Enable timer exceptions
 ori r16, r16, TIMER_INT | BTTN_INT
