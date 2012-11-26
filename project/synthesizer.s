@@ -2,12 +2,12 @@
  * ECE 385: Final Project
  */
  
-.macro MOVI32 reg, val   # movia replacement 
+.macro MOVI32 reg, val       # movia replacement 
   movhi \reg, %hi(\val)
   ori \reg, \reg, %lo(\val)
 .endm
 
-.macro count cycles                      # Start timer to count for given cycles
+.macro count cycles          # Start timer to count for given cycles
   movi32 r4, \cycles
   call timer_start
 .endm
@@ -16,6 +16,8 @@
 .equ ADDR_TIMER, 0x10002000  # Timer device
 .equ ADDR_AUDIO, 0x10003040  # Audio Device
 .equ ADDR_BTTN, 0x10000050   # Push Buttons
+.equ ADDR_SWCH, 0x10000040   # Slider Switches
+.equ ADDR_LED, 0x10000000    # LEDs
 .equ TIMER_INT, 0x00000001   # IRQ bit for timer interrupts
 .equ BTTN_INT, 0x00000002    # IRQ for push buttons
 .equ WAIT_CYCLES, 500        # 48000Hz + Margin
@@ -54,7 +56,12 @@ ldw r10, 8(sp)               # Check if output frequency changed
 beq r10, r2, isr_restore_stack
 stw r2, 8(sp)                # Put new value of r10 in stack
 
-mov r4, r2                   # Output newfrequency to LCD
+movi32 r20, ADDR_SWCH      # Output switch values to LEDs
+movi32 r21, ADDR_LED
+ldwio r24, 0(r20)
+stwio r24, 0(r21)
+
+mov r4, r2                   # Output new frequency to LCD
 call printFreq
 
 isr_restore_stack:
@@ -95,8 +102,8 @@ output_audio:
 movi32 r21, ADDR_AUDIO
 movi32 r24, VOL
 mul r24, r24, r9
-stwio r24,  8(r21)    # Output to left channel
-stwio r24, 12(r21)    # Output to right channel
+stwio r24,  8(r21)           # Output to left channel
+stwio r24, 12(r21)           # Output to right channel
 
 reset_timer:
 count WAIT_CYCLES            # Restart Timer
@@ -153,8 +160,8 @@ rdctl r16, ctl3              # Enable timer exceptions
 ori r16, r16, TIMER_INT | BTTN_INT
 wrctl ctl3, r16
 
-movia r2, ADDR_BTTN          # Enable interrupts on push buttons 1,2, and 3
-movia r3, 0xe
+movi32 r2, ADDR_BTTN         # Enable interrupts on push buttons 1,2, and 3
+movi32 r3, 0xe
 stwio r3, 8(r2)
 
 rdctl r16, ctl0              # Enable interrupts globally on the processor
